@@ -12,10 +12,9 @@ const char* server = "52.34.208.40";
 
 //TInyGPS
 TinyGPS gps;
-float flat, flon, fc, fkmph, falt;
-int year;
-byte month, day, hour, minute, second, hundredths;
-unsigned long fix_age;
+long lat, lon;
+unsigned long fix_age, time_, date, speed, course;
+float falt;
 
 //Wifi
 WiFiClient client;
@@ -26,13 +25,12 @@ int id = ESP.getChipId();
 void setup() {
 	Serial.begin(9600);
 	WiFi.begin(ssid, password);
-	WiFi.begin(ssid, password);
 	pinMode(BUILTIN_LED, OUTPUT);
 	while (WiFi.status() != WL_CONNECTED) {
 		digitalWrite(BUILTIN_LED, HIGH);
-		delay(50);
+		delay(500);
 		digitalWrite(BUILTIN_LED, LOW);
-		delay(50);
+		delay(500);
 	}
 }
 
@@ -42,11 +40,16 @@ void loop() {
 	while (Serial.available()) {
 		int c = Serial.read();
 		if (gps.encode(c)) {
-			gps.f_get_position(&flat, &flon, &fix_age); //get position
-			falt = gps.f_altitude(); // +/- altitude in meters
-			fc = gps.f_course(); // course in degrees
-			fkmph = gps.f_speed_kmph(); // speed in km/hr
-			gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &fix_age);
+			// retrieves + / -lat / long in 100000ths of a degree
+			gps.get_position(&lat, &lon, &fix_age);
+			// time in hhmmsscc, date in ddmmyy
+			gps.get_datetime(&date, &time_, &fix_age);
+			// returns speed in 100ths of a knot
+			speed = gps.speed() * 1.852;
+			// course in 100ths of a degree
+			course = gps.course();
+			//altitude
+			float falt = gps.f_altitude();
 		}
 	}
 
@@ -56,23 +59,19 @@ void loop() {
 		client.print("GET /gprmc/Data?id="); //id
 		client.print(id);
 		client.print("&code=0xF030&date="); //date
-		client.print(year);
-		client.print(month);
-		client.print(day);
+		client.print(date);
 		client.print("&time=");
-		client.print(hour);
-		client.print(minute);
-		client.print(second);
+		client.print(time_);
 		client.print("&lat=");
-		client.print(flat);
+		client.print(lat);
 		client.print("&lon=");
-		client.print(flon); 
+		client.print(lon); 
 		client.print("&alt=");
 		client.print(falt);
 		client.print("&head=");
-		client.print(fc);
+		client.print(course);
 		client.print("&speed=");
-		client.print(fkmph);
+		client.print(speed);
 
 		client.println(" HTTP/1.1");
 		client.println("Host: 52.34.208.40");
