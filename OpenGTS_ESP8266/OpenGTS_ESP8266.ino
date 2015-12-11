@@ -1,6 +1,6 @@
 // the setup function runs once when you press reset or power the board
 #include <ESP8266WiFi.h>
-#include <TinyGPS++.h>
+#include <TinyGPS.h>
 
 
 //SSID
@@ -11,7 +11,12 @@ const char* password = "12345678";
 const char* server = "52.34.208.40";
 
 //TInyGPS
-TinyGPSPlus gps;
+TinyGPS gps;
+float flat, flon, fc, fkmph, falt;
+int year;
+byte month, day, hour, minute, second, hundredths;
+unsigned long fix_age;
+
 //Wifi
 WiFiClient client;
 
@@ -33,8 +38,17 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-	while (Serial.available() > 0)
-		gps.encode(Serial.read());
+	//encode gps data
+	while (Serial.available()) {
+		int c = Serial.read();
+		if (gps.encode(c)) {
+			gps.f_get_position(&flat, &flon, &fix_age); //get position
+			falt = gps.f_altitude(); // +/- altitude in meters
+			fc = gps.f_course(); // course in degrees
+			fkmph = gps.f_speed_kmph(); // speed in km/hr
+			gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &fix_age);
+		}
+	}
 
 	//Send Data to Server if connected
 	if (client.connect(server, 8080)) {
@@ -42,21 +56,23 @@ void loop() {
 		client.print("GET /gprmc/Data?id="); //id
 		client.print(id);
 		client.print("&code=0xF030&date="); //date
-		client.print(gps.date.year());
-		client.print(gps.date.month());
-		client.print(gps.date.day());
+		client.print(year);
+		client.print(month);
+		client.print(day);
 		client.print("&time=");
-		client.print(gps.time.value());
+		client.print(hour);
+		client.print(minute);
+		client.print(second);
 		client.print("&lat=");
-		client.print(gps.location.lat());
+		client.print(flat);
 		client.print("&lon=");
-		client.print(gps.location.lng()); 
+		client.print(flon); 
 		client.print("&alt=");
-		client.print(gps.altitude.meters());
+		client.print(falt);
 		client.print("&head=");
-		client.print(gps.course.deg());
+		client.print(fc);
 		client.print("&speed=");
-		client.print(gps.speed.kmph());
+		client.print(fkmph);
 
 		client.println(" HTTP/1.1");
 		client.println("Host: 52.34.208.40");
