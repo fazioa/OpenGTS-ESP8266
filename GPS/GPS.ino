@@ -11,12 +11,12 @@
 
 static const int RXPin = 0, TXPin = 2;                // Ublox 6m GPS module to pins 12 and 13
 static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Baud Rate is 9600
-
+static const unsigned long timeToSendDataToServer=5000;
 
 char isotime[24];
 char lastisotime[24];
 char data[128];
-
+unsigned long lastSend=0;
 
 //OpenGTS server
 const char* server = "40.112.128.183";
@@ -44,16 +44,22 @@ void setup() {
   Serial.println("WIFI CONNECTED");
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
+    Serial.println("Serial Connection to GPS ok");
+    digitalWrite(BUILTIN_LED, LOW);
+    lastSend=millis();
 }
 
 
 
 // the loop function runs over and over again forever
 void loop() {
-  static unsigned long lastutc = 0;
 
-  smartDelay(3000);                                      // Run Procedure smartDelay
-
+  
+  smartDelay(1000);                                      // Run Procedure smartDelay
+  
+  
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+    Serial.println(F("No GPS data received: check wiring"));
 
 // check WiFi connection and connect to Traccar server if disconnected
     if (!client.connected()) {
@@ -82,11 +88,13 @@ void loop() {
     }
     strcpy(lastisotime,isotime);
 
-  // turn on  indicator LED
-  digitalWrite(BUILTIN_LED, HIGH);
 printInfoGPS(gps);
 
- 
+
+ if (millis() - lastSend > timeToSendDataToServer){
+  // turn on  indicator LED
+  digitalWrite(BUILTIN_LED, HIGH);
+  Serial.println("\n\nSEND DATA\n\n");
   // send data
     client.print(OsmAndProtocol(gps));
 
@@ -95,16 +103,18 @@ printInfoGPS(gps);
     Serial.print((char)client.read());
   }
 
-
-
   //  // turn off indicator LED
   digitalWrite(BUILTIN_LED, LOW);
+lastSend=millis();
+}
+
+ 
 }
 
 static void smartDelay(unsigned long ms)                // This custom version of delay() ensures that the gps object is being "fed".
 {
-  unsigned long start = millis();
-  do
+ unsigned long start = millis();
+  do 
   {
     while (ss.available())
       gps.encode(ss.read());
@@ -114,7 +124,6 @@ static void smartDelay(unsigned long ms)                // This custom version o
 
 static void printGPSDateTime()
 {
-  Serial.print(F("  Date/Time: "));
   if (gps.date.isValid())
   {
     Serial.print(gps.date.month());
