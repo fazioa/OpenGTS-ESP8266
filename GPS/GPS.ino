@@ -14,6 +14,7 @@ static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Bau
 
 
 char isotime[24];
+char lastisotime[24];
 char data[128];
 
 
@@ -53,6 +54,7 @@ void loop() {
 
   smartDelay(3000);                                      // Run Procedure smartDelay
 
+
 // check WiFi connection and connect to Traccar server if disconnected
     if (!client.connected()) {
       Serial.print("Connecting to ");
@@ -66,71 +68,27 @@ void loop() {
         return;
       }
     }
-  
 
 
-  // check UTC timestamp from GPS
-  //  unsigned long utcdate, utctime;
-  //  gps.get_datetime(&utcdate, &utctime, 0);
-  //  if (utctime == lastutc) {
-  //    return;
-  //  }
-
-  // turn on  indicator LED
-  digitalWrite(BUILTIN_LED, HIGH);
-
-  // now that new GPS coordinates are available
-  double lat, lng;
-  lat = gps.location.lat();
-  lng = gps.location.lng();
-  double speed = gps.speed.kmph();
-  double alt = gps.altitude.meters();
-  int sats = gps.satellites.value();
-  double heading = gps.course.deg();
-
-  Serial.print("Latitude  : ");
-  Serial.println(lat, 6);
-  Serial.print("Longitude : ");
-  Serial.println(lng, 6);
-  Serial.print("Satellites: ");
-  Serial.println(sats);
-  Serial.print("Elevation : ");
-  Serial.print(alt);
-  Serial.println("m");
-  printGPSDateTime();
-  Serial.println("");
-
-  Serial.print("Heading   : ");
-  Serial.println(gps.course.deg());
-  Serial.print("Speed     : ");
-  Serial.println(gps.speed.mph());
-
-
-
-  // generate ISO time string
+// generate ISO time string
   sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
           gps.date.year(), gps.date.month(), gps.date.day(),
           gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
 
-  Serial.print("isotime: ");
-  Serial.println(isotime);
+//controllo che il tempo del GPS non sia identico al ciclo precedente
+  if( strcmp(isotime,lastisotime) == 0 ) {
+//   check UTC timestamp from GPS
+      return;
+    }
+    strcpy(lastisotime,isotime);
 
-  // arrange and send data in OsmAnd protocol
-  // refer to https://www.traccar.org/osmand
-  String data = "&lat=" + String(lat, 6) + "&lon=" + String(lng, 6)   + "&altitude=" + String(alt, 1) + "&speed=" + String(speed, 1) + "&heading=" + String(heading, 1);
+  // turn on  indicator LED
+  digitalWrite(BUILTIN_LED, HIGH);
+printInfoGPS(gps);
 
-  Serial.print("data: ");
-  Serial.println(data);
-
-  Serial.println("");
-  Serial.println("");
-
-
-String URL= "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + data + " HTTP/1.1\r\n" +
-               "Host: " + TRACCAR_HOST + "\r\n" +
-               "Connection: keep-alive\r\n\r\n";
+ 
   // send data
-  client.print(URL);
+    client.print(OsmAndProtocol(gps));
 
   // output server response
   while (client.available()) {
@@ -190,3 +148,56 @@ static void printGPSDateTime()
     Serial.print(F("INVALID"));
   }
 }
+
+void printInfoGPS(TinyGPSPlus gps){
+   // now that new GPS coordinates are available
+  double lat, lng;
+  lat = gps.location.lat();
+  lng = gps.location.lng();
+  double speed = gps.speed.kmph();
+  double alt = gps.altitude.meters();
+  int sats = gps.satellites.value();
+  double heading = gps.course.deg();
+
+  Serial.print("Latitude  : ");
+  Serial.println(lat, 6);
+  Serial.print("Longitude : ");
+  Serial.println(lng, 6);
+  Serial.print("Satellites: ");
+  Serial.println(sats);
+  Serial.print("Elevation : ");
+  Serial.print(alt);
+  Serial.println("m");
+  printGPSDateTime();
+  Serial.println("");
+
+  Serial.print("Heading   : ");
+  Serial.println(gps.course.deg());
+  Serial.print("Speed     : ");
+  Serial.println(gps.speed.mph());
+  Serial.print("isotime: ");
+  Serial.println(isotime);
+
+}
+
+
+String OsmAndProtocol(TinyGPSPlus gps){
+  // now that new GPS coordinates are available
+  double lat, lng;
+  lat = gps.location.lat();
+  lng = gps.location.lng();
+  double speed = gps.speed.kmph();
+  double alt = gps.altitude.meters();
+  int sats = gps.satellites.value();
+  double heading = gps.course.deg();
+
+  
+  // arrange and send data in OsmAnd protocol
+  // refer to https://www.traccar.org/osmand
+    String data = "&lat=" + String(lat, 6) + "&lon=" + String(lng, 6)   + "&altitude=" + String(alt, 1) + "&speed=" + String(speed, 1) + "&heading=" + String(heading, 1);
+String URL= "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + data + " HTTP/1.1\r\n" +
+               "Host: " + TRACCAR_HOST + "\r\n" +
+               "Connection: keep-alive\r\n\r\n";
+  
+  return URL;
+  }
