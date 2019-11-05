@@ -1,6 +1,11 @@
+extern "C" {
+#include "user_interface.h"
+}
+
 // the setup function runs once when you press reset or power the board
 #include <ESP8266WiFi.h>
 #include "credenziali.h"
+#include "parameter.h"
 
 //Creare un file di testo con il seguente contenuto
 //SSID
@@ -11,18 +16,12 @@
 #include <SoftwareSerial.h>                             // Software Serial Library so we can use other Pins for communication with the GPS module
 
 
-#define TRACCAR_HOST "40.112.128.183"
-#define TRACCAR_PORT 5055
-//#define TRACCAR_DEV_ID "YOUR_DEVICE_ID"
-
 static const int RXPin = 0, TXPin = 2;                // Ublox 6m GPS module to pins 12 and 13
 static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Baud Rate is 9600
 
 
-static unsigned long timeToSendDataToServer = 20000; //fa frequenza di trasmissione viene rimodulata ad ogni cilo in base alla veloctà rilevata
-static unsigned long FREQMIN=7200000;
-static unsigned long FREQMED=20000;
-static unsigned long FREQMAX=5000;
+static unsigned long timeToSendDataToServer; //fa frequenza di trasmissione viene rimodulata ad ogni cilo in base alla veloctà rilevata
+
 
 static const int minDegToSendDataToServer = 30;
 
@@ -31,12 +30,8 @@ char isotime[24];
 char lastisotime[24];
 char data[128];
 unsigned long lastSend = 0;
-int lastDegree=0, degree = 0;
-float speed=0;
-
-
-//OpenGTS server
-const char* server = "40.112.128.183";
+int lastDegree = 0, degree = 0;
+float speed = 0;
 
 //Wifi
 WiFiClient client;
@@ -47,36 +42,32 @@ SoftwareSerial ss(RXPin, TXPin);                        // The serial connection
 TinyGPSPlus  gps;                                        // Create an Instance of the TinyGPS++ object called gps
 
 void setup() {
-  Serial.begin(9600);
-  WiFi.begin(ssid, password);
+  //pausa 5 secondi
+  delay(5000);
 
-  Serial.println("START");
+  Serial.begin(9600);
+  Serial.println(F("START"));
   pinMode(BUILTIN_LED, OUTPUT);
-  while (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(BUILTIN_LED, HIGH);
-    delay(500);
-    digitalWrite(BUILTIN_LED, LOW);
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("WIFI CONNECTED");
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
   Serial.println("Serial Connection to GPS ok");
+
   digitalWrite(BUILTIN_LED, LOW);
   lastSend = millis();
+  Serial.print("Free Ram: ");
+  Serial.println(system_get_free_heap_size());
 }
 
 
 
 // the loop function runs over and over again forever
 void loop() {
-
+  testWIFI();
 
   smartDelay(1000);                                      // Run Procedure smartDelay
 
-degree=gps.course.deg();
-speed = gps.speed.kmph();
+  degree = gps.course.deg();
+  speed = gps.speed.kmph();
 
 
 
@@ -86,13 +77,13 @@ speed = gps.speed.kmph();
 
   // check WiFi connection and connect to Traccar server if disconnected
   if (!client.connected()) {
-    Serial.print("Connecting to ");
+    Serial.print(F("Connecting to "));
     Serial.print(TRACCAR_HOST);
-    Serial.print("...");
+    Serial.print(F("..."));
     if (client.connect(TRACCAR_HOST, TRACCAR_PORT)) {
-      Serial.println("OK");
+      Serial.println(F("OK"));
     } else {
-      Serial.println("failed");
+      Serial.println(F("failed"));
       delay(3000);
       return;
     }
@@ -113,11 +104,11 @@ speed = gps.speed.kmph();
 
   printInfoGPS(gps);
 
-//invia i dati al server ogni X secondi
-  if ((millis() - lastSend > timeToSendDataToServer) || (abs(lastDegree- degree)>= minDegToSendDataToServer)) {
+  //invia i dati al server ogni X secondi
+  if ((millis() - lastSend > timeToSendDataToServer) || (abs(lastDegree - degree) >= minDegToSendDataToServer)) {
     // turn on  indicator LED
     digitalWrite(BUILTIN_LED, HIGH);
-    Serial.println("\n\nSEND DATA\n\n");
+    Serial.println(F("\n\nSEND DATA\n\n"));
     // send data
     client.print(OsmAndProtocol(gps));
 
@@ -131,25 +122,26 @@ speed = gps.speed.kmph();
 
     //memorizza alcuni parametri per valutare il prossimo invio dati al server
     lastSend = millis();
-    lastDegree=gps.course.deg();
+    lastDegree = gps.course.deg();
   }
 
 
 
-//se la velocità è bassa aumento la frequenza di invio, altrimenti la diminuisco
-//se la velocità è bassissima allora diminuisco l'invio
+  //se la velocità è bassa aumento la frequenza di invio, altrimenti la diminuisco
+  //se la velocità è bassissima allora diminuisco l'invio
 
-if(speed<3){
-  timeToSendDataToServer=FREQMIN;
-} else if (speed>=3 && speed <40) {
-  timeToSendDataToServer=FREQMED;
-} else if (speed >=40) {
-  timeToSendDataToServer=FREQMAX;
-}
-   Serial.print("Set frequency data send to ");
-   Serial.println(timeToSendDataToServer);
+  if (speed < velocita_soglia_min) {
+    timeToSendDataToServer = FREQMIN;
+  } else if (speed >= velocita_soglia_min && speed < velocita_soglia_max) {
+    timeToSendDataToServer = FREQMAX ;
+  } else if (speed >= velocita_soglia_max) {
+    timeToSendDataToServer = FREQMED;
+  }
+  Serial.print(F("Set frequency data send to "));
+  Serial.println(timeToSendDataToServer);
 
-
+  Serial.print(F("Free Ram: "));
+  Serial.println(system_get_free_heap_size());
 }
 
 static void smartDelay(unsigned long ms)                // This custom version of delay() ensures that the gps object is being "fed".
@@ -202,35 +194,29 @@ static void printGPSDateTime()
 
 void printInfoGPS(TinyGPSPlus gps) {
   // now that new GPS coordinates are available
-  double lat=0, lng=0;
-  
-  if (gps.location.isUpdated() && gps.location.isValid()) {
-    lat = gps.location.lat();
-    lng = gps.location.lng();
-  }
-  float speed = gps.speed.kmph();
-  double alt = gps.altitude.meters();
-  int sats = gps.satellites.value();
-  double heading = gps.course.deg();
-
   Serial.println();
-  Serial.print("Latitude  : ");
-  Serial.println(lat, 6);
-  Serial.print("Longitude : ");
-  Serial.println(lng, 6);
-  Serial.print("Satellites: ");
-  Serial.println(sats);
-  Serial.print("Elevation : ");
-  Serial.print(alt);
-  Serial.println("m");
-  printGPSDateTime();
+  Serial.print(F("Location is updated: "));
+  Serial.println(gps.location.isUpdated());
+  Serial.print(F("Location is valid: "));
+  Serial.println(gps.location.isValid());
+
+  Serial.print(F("Latitude  : "));
+  Serial.println(gps.location.lat(), 6);
+  Serial.print(F("Longitude : "));
+  Serial.println(gps.location.lng(), 6);
+  Serial.print(F("Satellites: "));
+  Serial.println(gps.satellites.value());
+  Serial.print(F("Elevation : "));
+  Serial.print(gps.altitude.meters());
+  Serial.println(F("m"));
+  //printGPSDateTime();
   Serial.println("");
 
-  Serial.print("Heading   : ");
-  Serial.println(heading);
-  Serial.print("Speed     : ");
-  Serial.println(speed);
-  Serial.print("isotime: ");
+  Serial.print(F("Heading   : "));
+  Serial.println(gps.course.deg());
+  Serial.print(F("Speed     : "));
+  Serial.println(gps.speed.kmph());
+  Serial.print(F("isotime: "));
   Serial.println(isotime);
 
 }
@@ -239,15 +225,7 @@ void printInfoGPS(TinyGPSPlus gps) {
 String OsmAndProtocol(TinyGPSPlus gps) {
   // now that new GPS coordinates are available
   double lat, lng, alt, speed;
-String URL="";
-  if (gps.location.isUpdated() && gps.location.isValid()) {
-    lat = gps.location.lat();
-    lng = gps.location.lng();
-    speed = gps.speed.kmph();
-    alt = gps.altitude.meters();
-  }
-  int sats = gps.satellites.value();
-  double heading = gps.course.deg();
+  String URL = "";
 
   if (gps.date.isUpdated() && gps.date.isValid() )
   {
@@ -257,13 +235,60 @@ String URL="";
             gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
   }
 
-  if (lat != 0 && lng != 0) {
-  // arrange and send data in OsmAnd protocol
-  // refer to https://www.traccar.org/osmand
-  String data = "&lat=" + String(lat, 6) + "&lon=" + String(lng, 6)   + "&altitude=" + String(alt, 1) + "&speed=" + String(speed, 1) + "&heading=" + String(heading, 1);
-  URL = "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + data + " HTTP/1.1\r\n" +
-               "Host: " + TRACCAR_HOST + "\r\n" +
-               "Connection: keep-alive\r\n\r\n";
+  if (gps.location.isUpdated() && gps.location.isValid() && gps.location.lat() != 0 && gps.location.lng() != 0) {
+    // arrange and send data in OsmAnd protocol
+    // refer to https://www.traccar.org/osmand
+    String data = "&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6)   + "&altitude=" + String(gps.altitude.meters(), 1) + "&speed=" + String(gps.speed.kmph(), 1) + "&heading=" + String(gps.course.deg(), 1);
+    URL = "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + data + " HTTP/1.1\r\n" +
+          "Host: " + TRACCAR_HOST + "\r\n" +
+          "Connection: keep-alive\r\n\r\n";
   }
   return URL;
+}
+
+
+static unsigned long wifiTime = 90000;
+unsigned long lastMillisWifiTime = millis() + wifiTime;
+void testWIFI() {
+  if (millis() - lastMillisWifiTime > wifiTime ) {
+    //verifica ogni 90 sec che la ESP sia collegata alla rete Wifi (5 tentativi, poi reset ESP)
+    int tent = 0;
+
+    Serial.println(F("Verifico connessione"));
+
+    while ((WiFi.status() != WL_CONNECTED) && tent < 4)
+    {
+      yield();
+      delay(1000);
+      WiFi.disconnect();
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid, password);
+      int ritardo = 0;
+      while ((WiFi.status() != WL_CONNECTED) && ritardo < 10)
+      {
+        //mentre attende la connessione fa lampeggiare il led
+        digitalWrite(BUILTIN_LED, HIGH);
+        delay(500);
+        Serial.print(F("."));
+        digitalWrite(BUILTIN_LED, LOW);
+        delay(500);
+        ritardo += 1;
+        Serial.println(ritardo);
+      }
+
+      if (WiFi.status() != WL_CONNECTED )
+      {
+        delay(2000);
+      } else {
+        Serial.println("WIFI CONNECTED");
+      }
+      tent += 1;
+    }
+
+    if (tent > 4) {
+      Serial.println(F("tentativo non riuscito"));
+      ESP.reset();
+    }
+    lastMillisWifiTime = millis();
+  }
 }
