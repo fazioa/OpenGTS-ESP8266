@@ -16,7 +16,7 @@ extern "C" {
 #include <SoftwareSerial.h>                             // Software Serial Library so we can use other Pins for communication with the GPS module
 
 
-static const int RXPin = 0, TXPin = 2;                // Ublox 6m GPS module to pins 12 and 13
+static const int RXPin = 4, TXPin = 5;                // Ublox 6m GPS module to pins 12 and 13
 static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Baud Rate is 9600
 
 
@@ -42,11 +42,10 @@ SoftwareSerial ss(RXPin, TXPin);                        // The serial connection
 TinyGPSPlus  gps;                                        // Create an Instance of the TinyGPS++ object called gps
 
 void setup() {
-  //pausa 5 secondi
-  delay(5000);
-
   Serial.begin(9600);
   Serial.println(F("START"));
+    //pausa 5 secondi
+  delay(5000);
   pinMode(BUILTIN_LED, OUTPUT);
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
@@ -84,7 +83,7 @@ void loop() {
       Serial.println(F("OK"));
     } else {
       Serial.println(F("failed"));
-      delay(3000);
+      delay(5000);
       return;
     }
   }
@@ -104,7 +103,7 @@ void loop() {
 
   printInfoGPS(gps);
 
-  //invia i dati al server ogni X secondi
+  //invia i dati al server ogni X secondi o in base alla differenza di direzione rispetto all'invio dati precedente
   if ((millis() - lastSend > timeToSendDataToServer) || (abs(lastDegree - degree) >= minDegToSendDataToServer)) {
     // turn on  indicator LED
     digitalWrite(BUILTIN_LED, HIGH);
@@ -142,6 +141,7 @@ void loop() {
 
   Serial.print(F("Free Ram: "));
   Serial.println(system_get_free_heap_size());
+
 }
 
 static void smartDelay(unsigned long ms)                // This custom version of delay() ensures that the gps object is being "fed".
@@ -221,12 +221,10 @@ void printInfoGPS(TinyGPSPlus gps) {
 
 }
 
-
+String URL = "", gpsdata="";
 String OsmAndProtocol(TinyGPSPlus gps) {
   // now that new GPS coordinates are available
-  double lat, lng, alt, speed;
-  String URL = "";
-
+    
   if (gps.date.isUpdated() && gps.date.isValid() )
   {
     // generate ISO time string
@@ -238,8 +236,8 @@ String OsmAndProtocol(TinyGPSPlus gps) {
   if (gps.location.isUpdated() && gps.location.isValid() && gps.location.lat() != 0 && gps.location.lng() != 0) {
     // arrange and send data in OsmAnd protocol
     // refer to https://www.traccar.org/osmand
-    String data = "&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6)   + "&altitude=" + String(gps.altitude.meters(), 1) + "&speed=" + String(gps.speed.kmph(), 1) + "&heading=" + String(gps.course.deg(), 1);
-    URL = "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + data + " HTTP/1.1\r\n" +
+    gpsdata = "&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6)   + "&altitude=" + String(gps.altitude.meters(), 1) + "&speed=" + String(gps.speed.kmph(), 1) + "&heading=" + String(gps.course.deg(), 1);
+    URL = "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + gpsdata + " HTTP/1.1\r\n" +
           "Host: " + TRACCAR_HOST + "\r\n" +
           "Connection: keep-alive\r\n\r\n";
   }
@@ -277,7 +275,7 @@ void testWIFI() {
       }
 
       if (WiFi.status() != WL_CONNECTED )
-      {
+      {  
         delay(2000);
       } else {
         Serial.println("WIFI CONNECTED");
