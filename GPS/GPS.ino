@@ -57,8 +57,6 @@ void setup() {
   Serial.println(system_get_free_heap_size());
 }
 
-
-
 // the loop function runs over and over again forever
 void loop() {
   testWIFI();
@@ -68,26 +66,20 @@ void loop() {
   degree = gps.course.deg();
   speed = gps.speed.kmph();
 
-
-
-
-  if (millis() > 5000 && gps.charsProcessed() < 10)
-    Serial.println(F("No GPS data received: check wiring"));
-
   // check WiFi connection and connect to Traccar server if disconnected
   if (!client.connected()) {
     Serial.print(F("Connecting to "));
     Serial.print(TRACCAR_HOST);
     Serial.print(F("..."));
     if (client.connect(TRACCAR_HOST, TRACCAR_PORT)) {
-      Serial.println(F("OK"));
+       Serial.println(F("OK"));
     } else {
-      Serial.println(F("failed"));
+      Serial.println(F("failed - Wifi Client Stop"));
+      client.stop();
       delay(5000);
       return;
     }
   }
-
 
   // generate ISO time string
   sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
