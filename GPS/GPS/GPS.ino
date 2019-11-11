@@ -23,7 +23,6 @@ static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Bau
 static unsigned long timeToSendDataToServer; //fa frequenza di trasmissione viene rimodulata ad ogni cilo in base alla veloctà rilevata
 
 
-static const int minDegToSendDataToServer = 30;
 
 
 char isotime[24];
@@ -50,7 +49,7 @@ void setup() {
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
   Serial.println("Serial Connection to GPS ok");
-
+  
   digitalWrite(BUILTIN_LED, LOW);
   lastSend = millis();
   Serial.print("Free Ram: ");
@@ -58,6 +57,7 @@ void setup() {
 }
 
 // the loop function runs over and over again forever
+int clientResponse=0;
 void loop() {
   testWIFI();
 
@@ -71,9 +71,26 @@ void loop() {
     Serial.print(F("Connecting to "));
     Serial.print(TRACCAR_HOST);
     Serial.print(F("..."));
-    if (client.connect(TRACCAR_HOST, TRACCAR_PORT)) {
+    clientResponse=client.connect(TRACCAR_HOST, TRACCAR_PORT);
+    
+    if (clientResponse==1) {
        Serial.println(F("OK"));
     } else {
+       Serial.println(F("Connection error"));
+      switch (clientResponse){
+        case -1:
+        Serial.println(F("TIMED_OUT "));
+        break;
+        case -2:
+        Serial.println(F("INVALID_SERVER"));
+        break;
+        case -3:
+        Serial.println(F("TRUNCATED"));
+        break;
+        case -4:
+        Serial.println(F("INVALID_RESPONSE "));
+        break;
+      }
       Serial.println(F("failed - Wifi Client Stop"));
       client.stop();
       delay(5000);
@@ -250,9 +267,11 @@ void testWIFI() {
     {
       yield();
       delay(1000);
-      WiFi.disconnect();
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(ssid, password);
+      //WiFi.disconnect();
+    //  WiFi.mode(WIFI_STA);
+     // WiFi.begin(ssid, password);
+     Serial.println(F("Riconnessione"));
+     WiFi.reconnect();
       int ritardo = 0;
       while ((WiFi.status() != WL_CONNECTED) && ritardo < 10)
       {
