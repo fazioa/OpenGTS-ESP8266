@@ -11,4 +11,4 @@ static const int minDegToSendDataToServer = 30; //se la direzione cambia di oltr
 
 #define TRACCAR_HOST "40.112.128.183"
 #define TRACCAR_PORT 5055
-//#define TRACCAR_DEV_ID "YOUR_DEVICE_ID"
+//#define TRACCAR_DEV_ID "tonz"  //comment for automatic ID

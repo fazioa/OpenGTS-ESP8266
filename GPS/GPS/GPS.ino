@@ -3,14 +3,15 @@ extern "C" {
 }
 
 // the setup function runs once when you press reset or power the board
-#include <ESP8266WiFi.h>
-#include "credenziali.h"
 #include "parameter.h"
+#include "network.h"
+#include "traccar.h"
+
 
 //Creare un file di testo con il seguente contenuto
 //SSID
-//const char* ssid = "*****";
-//const char* password = "*****";
+//const char* WiFi_SSID = "*****";
+//const char* WiFi_Password = "*****";
 
 #include <TinyGPS++.h>                                 // Tiny GPS Library
 #include <SoftwareSerial.h>                             // Software Serial Library so we can use other Pins for communication with the GPS module
@@ -22,81 +23,47 @@ static const uint32_t GPSBaud = 9600;                   // Ublox GPS default Bau
 
 static unsigned long timeToSendDataToServer; //fa frequenza di trasmissione viene rimodulata ad ogni cilo in base alla veloctà rilevata
 
-
-
-
-char isotime[24];
-char lastisotime[24];
-char data[128];
 unsigned long lastSend = 0;
 int lastDegree = 0, degree = 0;
 float speed = 0;
+char lastisotime[24];
+char isotime[24];
+TinyGPSPlus gps;                                        // Create an Instance of the TinyGPS++ object called gps
 
-//Wifi
-WiFiClient client;
 
-//Some variable
-int TRACCAR_DEV_ID = ESP.getChipId();
+
 SoftwareSerial ss(RXPin, TXPin);                        // The serial connection to the GPS device
-TinyGPSPlus  gps;                                        // Create an Instance of the TinyGPS++ object called gps
 
 void setup() {
   Serial.begin(9600);
   Serial.println(F("START"));
-    //pausa 5 secondi
+
+  //pausa 5 secondi
   delay(5000);
   pinMode(BUILTIN_LED, OUTPUT);
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
   Serial.println("Serial Connection to GPS ok");
-  
+
   digitalWrite(BUILTIN_LED, LOW);
   lastSend = millis();
   Serial.print("Free Ram: ");
   Serial.println(system_get_free_heap_size());
+
+  initTRACCAR();
+  getIPAddress(20);
 }
 
 // the loop function runs over and over again forever
-int clientResponse=0;
-void loop() {
-  testWIFI();
 
-  smartDelay(1000);                                      // Run Procedure smartDelay
+void loop() {
+  smartDelay(1000);                                      //Acquisisce dati dal GPS
 
   degree = gps.course.deg();
   speed = gps.speed.kmph();
 
-  // check WiFi connection and connect to Traccar server if disconnected
-  if (!client.connected()) {
-    Serial.print(F("Connecting to "));
-    Serial.print(TRACCAR_HOST);
-    Serial.print(F("..."));
-    clientResponse=client.connect(TRACCAR_HOST, TRACCAR_PORT);
-    
-    if (clientResponse==1) {
-       Serial.println(F("OK"));
-    } else {
-       Serial.println(F("Connection error"));
-      switch (clientResponse){
-        case -1:
-        Serial.println(F("TIMED_OUT "));
-        break;
-        case -2:
-        Serial.println(F("INVALID_SERVER"));
-        break;
-        case -3:
-        Serial.println(F("TRUNCATED"));
-        break;
-        case -4:
-        Serial.println(F("INVALID_RESPONSE "));
-        break;
-      }
-      Serial.println(F("failed - Wifi Client Stop"));
-      client.stop();
-      delay(5000);
-      return;
-    }
-  }
+connectTRACCAR();
+  
 
   // generate ISO time string
   sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
@@ -116,14 +83,10 @@ void loop() {
   if ((millis() - lastSend > timeToSendDataToServer) || (abs(lastDegree - degree) >= minDegToSendDataToServer)) {
     // turn on  indicator LED
     digitalWrite(BUILTIN_LED, HIGH);
-    Serial.println(F("\n\nSEND DATA\n\n"));
+    Serial.println(F("\n\nSEND DATA\n"));
     // send data
-    client.print(OsmAndProtocol(gps));
+    OsmAndProtocol(gps, isotime);
 
-    // output server response
-    while (client.available()) {
-      Serial.print((char)client.read());
-    }
 
     //  // turn off indicator LED
     digitalWrite(BUILTIN_LED, LOW);
@@ -228,76 +191,4 @@ void printInfoGPS(TinyGPSPlus gps) {
   Serial.print(F("isotime: "));
   Serial.println(isotime);
 
-}
-
-String URL = "", gpsdata="";
-String OsmAndProtocol(TinyGPSPlus gps) {
-  // now that new GPS coordinates are available
-    
-  if (gps.date.isUpdated() && gps.date.isValid() )
-  {
-    // generate ISO time string
-    sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
-            gps.date.year(), gps.date.month(), gps.date.day(),
-            gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
-  }
-
-  if (gps.location.isUpdated() && gps.location.isValid() && gps.location.lat() != 0 && gps.location.lng() != 0) {
-    // arrange and send data in OsmAnd protocol
-    // refer to https://www.traccar.org/osmand
-    gpsdata = "&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6)   + "&altitude=" + String(gps.altitude.meters(), 1) + "&speed=" + String(gps.speed.kmph(), 1) + "&heading=" + String(gps.course.deg(), 1);
-    URL = "GET /?id=" + String(TRACCAR_DEV_ID) + "&timestamp=" + isotime + gpsdata + " HTTP/1.1\r\n" +
-          "Host: " + TRACCAR_HOST + "\r\n" +
-          "Connection: keep-alive\r\n\r\n";
-  }
-  return URL;
-}
-
-
-static unsigned long wifiTime = 90000;
-unsigned long lastMillisWifiTime = millis() + wifiTime;
-void testWIFI() {
-  if (millis() - lastMillisWifiTime > wifiTime ) {
-    //verifica ogni 90 sec che la ESP sia collegata alla rete Wifi (5 tentativi, poi reset ESP)
-    int tent = 0;
-
-    Serial.println(F("Verifico connessione"));
-
-    while ((WiFi.status() != WL_CONNECTED) && tent < 4)
-    {
-      yield();
-      delay(1000);
-      //WiFi.disconnect();
-    //  WiFi.mode(WIFI_STA);
-     // WiFi.begin(ssid, password);
-     Serial.println(F("Riconnessione"));
-     WiFi.reconnect();
-      int ritardo = 0;
-      while ((WiFi.status() != WL_CONNECTED) && ritardo < 10)
-      {
-        //mentre attende la connessione fa lampeggiare il led
-        digitalWrite(BUILTIN_LED, HIGH);
-        delay(500);
-        Serial.print(F("."));
-        digitalWrite(BUILTIN_LED, LOW);
-        delay(500);
-        ritardo += 1;
-        Serial.println(ritardo);
-      }
-
-      if (WiFi.status() != WL_CONNECTED )
-      {  
-        delay(2000);
-      } else {
-        Serial.println("WIFI CONNECTED");
-      }
-      tent += 1;
-    }
-
-    if (tent > 4) {
-      Serial.println(F("tentativo non riuscito"));
-      ESP.reset();
-    }
-    lastMillisWifiTime = millis();
-  }
 }
