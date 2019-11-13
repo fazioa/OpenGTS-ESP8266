@@ -1,1 +1,1 @@
-void getIPAddress(unsigned long);
+void startWiFi(unsigned long);

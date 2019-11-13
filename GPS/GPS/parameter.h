@@ -10,5 +10,8 @@ static unsigned long FREQMAX = 5000; //freq invio tra soglia min e soglia max
 static const int minDegToSendDataToServer = 30; //se la direzione cambia di oltre 30 gradi allora viene forzato l'invio dei dati al server
 
 #define TRACCAR_HOST "40.112.128.183"
-#define TRACCAR_PORT 5055
+#define TRACCAR_OSMAND_PORT 5055
+
+#define TRACCAR_GPS103_PORT 5001
+#define TRACCAR_GPS103_CELLPHONENUMBER "33312345678"
 //#define TRACCAR_DEV_ID "tonz"  //comment for automatic ID

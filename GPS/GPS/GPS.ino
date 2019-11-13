@@ -1,7 +1,3 @@
-extern "C" {
-#include "user_interface.h"
-}
-
 // the setup function runs once when you press reset or power the board
 #include "parameter.h"
 #include "network.h"
@@ -44,31 +40,50 @@ void setup() {
 
   ss.begin(GPSBaud);                                    // Set Software Serial Comm Speed to 9600
   Serial.println("Serial Connection to GPS ok");
-
+  
   digitalWrite(BUILTIN_LED, LOW);
   lastSend = millis();
-  Serial.print("Free Ram: ");
-  Serial.println(system_get_free_heap_size());
-
+ 
   initTRACCAR();
-  getIPAddress(20);
+  startWiFi(20);
 }
 
 // the loop function runs over and over again forever
-
+int statoConnessione = 0;
 void loop() {
   smartDelay(1000);                                      //Acquisisce dati dal GPS
 
   degree = gps.course.deg();
   speed = gps.speed.kmph();
 
-connectTRACCAR();
-  
+statoConnessione=connectTRACCAR(TRACCAR_OSMAND_PORT);
+if (statoConnessione < 1) {
+  Serial.println("Start WiFi");
+	startWiFi(20);
+ }
 
-  // generate ISO time string
-  sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
-          gps.date.year(), gps.date.month(), gps.date.day(),
-          gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
+
+//statoConnessione = connectTRACCAR(TRACCAR_GPS103_PORT);
+//if (statoConnessione < 1) {
+//  Serial.println("Start WiFi");
+//	startWiFi(20);
+//}
+
+  // generate ISO time string for OSMAND Protocol
+if (gps.date.isUpdated() && gps.date.isValid()) {
+	sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
+		gps.date.year(), gps.date.month(), gps.date.day(),
+		gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
+}
+
+// generate ISO time string for GPS103 Protocol
+//if (gps.date.isUpdated() && gps.date.isValid()) {
+//	sprintf(isotime, "%02u%02u%02u%02u%02u%02u",
+//		gps.date.year()-2000, gps.date.month(), gps.date.day(),
+//		gps.time.hour(), gps.time.minute(), gps.time.second());
+//}
+
+
 
   //controllo che il tempo del GPS non sia identico al ciclo precedente
   if ( strcmp(isotime, lastisotime) == 0 ) {
@@ -84,9 +99,12 @@ connectTRACCAR();
     // turn on  indicator LED
     digitalWrite(BUILTIN_LED, HIGH);
     Serial.println(F("\n\nSEND DATA\n"));
-    // send data
+ 
+  // send data
     OsmAndProtocol(gps, isotime);
-
+    
+	//gps103 NON FUNZIONA ANCORA
+	//GPS103Protocol(gps, isotime);
 
     //  // turn off indicator LED
     digitalWrite(BUILTIN_LED, LOW);
@@ -110,10 +128,6 @@ connectTRACCAR();
   }
   Serial.print(F("Set frequency data send to "));
   Serial.println(timeToSendDataToServer);
-
-  Serial.print(F("Free Ram: "));
-  Serial.println(system_get_free_heap_size());
-
 }
 
 static void smartDelay(unsigned long ms)                // This custom version of delay() ensures that the gps object is being "fed".
@@ -182,8 +196,6 @@ void printInfoGPS(TinyGPSPlus gps) {
   Serial.print(gps.altitude.meters());
   Serial.println(F("m"));
   //printGPSDateTime();
-  Serial.println("");
-
   Serial.print(F("Heading   : "));
   Serial.println(gps.course.deg());
   Serial.print(F("Speed     : "));

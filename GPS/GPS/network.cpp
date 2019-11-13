@@ -1,12 +1,13 @@
 #include "credenziali.h"
 #include <ESP8266WiFi.h>
 
-void getIPAddress(unsigned long timeout) {
+void startWiFi(unsigned long timeout) {
   // If is the first time that we connect to WiFi.SSID
   if (strcmp(WiFi.SSID().c_str(), WiFi_SSID) || strcmp(WiFi.psk().c_str(), WiFi_Password))
   {
     Serial.println(F("Connessione WiFi"));
     WiFi.mode(WIFI_STA);
+	WiFi.setSleepMode(WIFI_NONE_SLEEP);
     WiFi.begin(WiFi_SSID, WiFi_Password);
   } else {
     Serial.println(F("Riconnessione WiFi"));
@@ -26,9 +27,7 @@ void getIPAddress(unsigned long timeout) {
     digitalWrite(BUILTIN_LED, HIGH);
   } else {
     Serial.println(F("Failed connection"));
-    Serial.println(F("Reset board"));
-    ESP.reset();
+  //  Serial.println(F("Force Sleep Wake"));
+   // WiFi.forceSleepWake();
   }
-
-
 }
