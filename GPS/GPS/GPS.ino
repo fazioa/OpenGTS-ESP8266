@@ -56,32 +56,28 @@ void loop() {
   degree = gps.course.deg();
   speed = gps.speed.kmph();
 
-statoConnessione=connectTRACCAR(TRACCAR_OSMAND_PORT);
+// statoConnessione=connectTRACCAR(TRACCAR_OSMAND_PORT);
+statoConnessione = connectTRACCAR(TRACCAR_GPS103_PORT);
 if (statoConnessione < 1) {
   Serial.println("Start WiFi");
 	startWiFi(20);
- }
-
-
-//statoConnessione = connectTRACCAR(TRACCAR_GPS103_PORT);
-//if (statoConnessione < 1) {
-//  Serial.println("Start WiFi");
-//	startWiFi(20);
-//}
+}
 
   // generate ISO time string for OSMAND Protocol
-if (gps.date.isUpdated() && gps.date.isValid()) {
+/* if (gps.date.isUpdated() && gps.date.isValid()) {
 	sprintf(isotime, "%04u-%02u-%02uT%02u:%02u:%02u.%01uZ",
 		gps.date.year(), gps.date.month(), gps.date.day(),
 		gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond());
 }
+*/
 
 // generate ISO time string for GPS103 Protocol
-//if (gps.date.isUpdated() && gps.date.isValid()) {
-//	sprintf(isotime, "%02u%02u%02u%02u%02u%02u",
-//		gps.date.year()-2000, gps.date.month(), gps.date.day(),
-//		gps.time.hour(), gps.time.minute(), gps.time.second());
-//}
+if (gps.date.isUpdated() && gps.date.isValid()) {
+	sprintf(isotime, "%02u%02u%02u%02u%02u%02u",
+		gps.date.year()-2000, gps.date.month(), gps.date.day(),
+		gps.time.hour(), gps.time.minute(), gps.time.second());
+	
+}
 
 
 
@@ -101,10 +97,10 @@ if (gps.date.isUpdated() && gps.date.isValid()) {
     Serial.println(F("\n\nSEND DATA\n"));
  
   // send data
-    OsmAndProtocol(gps, isotime);
+//    OsmAndProtocol(gps, isotime);
     
 	//gps103 NON FUNZIONA ANCORA
-	//GPS103Protocol(gps, isotime);
+	GPS103Protocol(gps, isotime);
 
     //  // turn off indicator LED
     digitalWrite(BUILTIN_LED, LOW);

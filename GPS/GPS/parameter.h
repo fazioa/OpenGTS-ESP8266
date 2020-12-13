@@ -14,4 +14,4 @@ static const int minDegToSendDataToServer = 30; //se la direzione cambia di oltr
 
 #define TRACCAR_GPS103_PORT 5001
 #define TRACCAR_GPS103_CELLPHONENUMBER "33312345678"
-//#define TRACCAR_DEV_ID "tonz"  //comment for automatic ID
+#define TRACCAR_DEV_ID "321465855612345"  //comment for automatic ID

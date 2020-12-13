@@ -99,6 +99,7 @@ int connectTRACCAR(int PORT){
 
 //NON FUNZIONA ANCORA
 //imei:359587010124900,tracker,0809231929,13554900601,F,112909.397,A,2234.4669,N,11354.3287,E,0.11,;
+unsigned long fixTime;
 void GPS103Protocol(TinyGPSPlus gps, char gpsisotime[24]) {
 
 	//if (gps.date.isUpdated() && gps.date.isValid())
@@ -111,22 +112,29 @@ void GPS103Protocol(TinyGPSPlus gps, char gpsisotime[24]) {
 	//	//Serial.println(gpsisotime);
 	//}
 
-	if (gps.location.isUpdated() && gps.location.isValid() && gps.location.lat() != 0 && gps.location.lng() != 0) {
-		//// arrange and send data in GPS103 protocol
-		gpsdata="imei:" + String(traccar_dev_ID) + ",tracker," + gpsisotime + "," + String(TRACCAR_GPS103_CELLPHONENUMBER) +  ",F,,A,"+ String(gps.location.lat()*1000, 3) + ",N," + String(gps.location.lng()*1000, 3) + ",E,"+ String(gps.speed.kmph(), 1) + ","+ String(gps.course.deg(), 1)+";";
+	//GPS103 LOGIN
+	gpsdata = "##,imei:" + String(traccar_dev_ID) + ",A;";
+	client.print(gpsdata);
+	Serial.println("gpsdata");
+	Serial.println(gpsdata);
 
-		//gpsdata = "&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6) + "&altitude=" + String(gps.altitude.meters(), 1) + "&speed=" + String(gps.speed.kmph(), 1) + "&heading=" + String(gps.course.deg(), 1);
-		Serial.println("gpsdata");
+	if (gps.location.isUpdated() && gps.location.isValid() && gps.location.lat() != 0 && gps.location.lng() != 0) {
+
+		//// arrange and send data in GPS103 protocol
+		//gpsdata="imei:" + String(traccar_dev_ID) + ",tracker," + gpsisotime + ",,F,"+ fixTime + ",A,"+ String(gps.location.lat()*1000, 3) + "," + String(gps.location.lng()*1000, 3) + ","+ String(gps.speed.kmph(), 1) + ","+ String(gps.course.deg(), 1)+";";
+			
+		gpsdata = "imei:" + String(traccar_dev_ID) + ",tracker," + gpsisotime + ",,F,,A," + String(gps.location.lat()*100, 4) + ",N," + String(gps.location.lng()*100, 4) + ",E," + String(gps.speed.kmph(), 2) + "," + String(gps.course.deg(), 1) + ";";
+				
+		
+
+		//invia dati al server
+	client.print(gpsdata);
+		
+	Serial.println("gpsdata");
 		Serial.println(gpsdata);
-		//URL = "GET /?id=" + String(traccar_dev_ID) + "&timestamp=" + gpsisotime + gpsdata + " HTTP/1.1\r\n" +
-		//	"Host: " + TRACCAR_HOST + "\r\n" +
-		//	"Connection: keep-alive\r\n\r\n";
-		//Serial.println("URL");
-	//	Serial.println(URL);
 	}
 
-	//invia dati al server
-	client.print(URL);
+	
 
 	// output server response
 	while (client.available()) {
